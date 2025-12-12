@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Мои записи</title>
+    <link rel="stylesheet" th:href="@{/style.css}" />
+</head>
+<body>
+<div class="container">
+    <h1> Мои записи</h1>
+
+    <a href="/festivals" class="btn btn-secondary" style="margin-bottom: 16px;">← К списку фестивалей</a>
+
+    <div th:if="${registrations.isEmpty()}" class="empty-card">
+        Вы пока никуда не записаны
+    </div>
+
+    <div class="cards-grid" th:if="${!registrations.isEmpty()}">
+        <div class="ticket-card" th:each="r : ${registrations}">
+            <div class="card-top">
+                <span class="chip blue" th:text="${r.festival?.location ?: '—'}">Локация</span>
+                <span class="chip gray" th:text="${'Билетов: ' + r.tickets}">Билетов</span>
+            </div>
+            <h3 class="card-title" th:text="${r.festival?.name ?: '—'}"></h3>
+            <div class="meta-list">
+                <div class="meta-item">
+                    <span class="meta-label">Дата начала</span>
+                    <span class="meta-value">
+                        <span class="date-display" th:text="${r.festival?.startDate != null ? #temporals.format(r.festival.startDate, 'dd.MM.yyyy') : '—'}"></span>
+                    </span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Дата записи</span>
+                    <span class="meta-value">
+                        <span class="date-display" th:text="${r.createdAt != null ? #temporals.format(r.createdAt, 'dd.MM.yyyy HH:mm') : '—'}"></span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

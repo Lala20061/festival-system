@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Статистика</title>
+    <link rel="stylesheet" th:href="@{/style.css}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>Статистика</h1>
+
+    <div th:if="${isOrganizer}" class="stats-section">
+        <div class="stats-cards">
+            <div class="stat-card">
+                <h3>Мои фестивали</h3>
+                <div class="stat-value" th:text="${myFestCount}">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Записалось на мои фестивали</h3>
+                <div class="stat-value" th:text="${myRegistrations}">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Среднее количество артистов</h3>
+                <div class="stat-value" th:text="${myAverageArtists}">0</div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="organizerChart"></canvas>
+        </div>
+    </div>
+
+    <div th:if="${!isOrganizer}" class="stats-section">
+        <div class="stats-cards">
+            <div class="stat-card">
+                <h3>Всего пользователей</h3>
+                <div class="stat-value" th:text="${totalUsers}">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Всего фестивалей</h3>
+                <div class="stat-value" th:text="${totalFestivals}">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Всего записей на фестивали</h3>
+                <div class="stat-value" th:text="${totalRegistrations}">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Среднее число артистов на фестиваль</h3>
+                <div class="stat-value" th:text="${avgArtistsPerFest}">0</div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="adminChart"></canvas>
+        </div>
+    </div>
+
+    <a href="/festivals" class="back-link" style="margin-top: 32px; display: inline-block;">← Назад к фестивалям</a>
+</div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    document.addEventListener('DOMContentLoaded', function() {
+        const orgCtx = document.getElementById('organizerChart');
+        if (orgCtx) {
+            const myFestCount = /*[[${isOrganizer ? myFestCount : 0}]]*/ 0;
+            const myRegistrations = /*[[${isOrganizer ? myRegistrations : 0}]]*/ 0;
+            const myAverageArtists = /*[[${isOrganizer ? myAverageArtists : 0}]]*/ 0;
+
+            new Chart(orgCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Мои фестивали', 'Записи', 'Среднее артистов'],
+                    datasets: [{
+                        label: 'Статистика',
+                        data: [
+                            myFestCount,
+                            myRegistrations,
+                            parseFloat(myAverageArtists) || 0
+                        ],
+                        backgroundColor: [
+                            'rgba(255, 159, 67, 0.8)',
+                            'rgba(107, 197, 210, 0.8)',
+                            'rgba(255, 159, 67, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 159, 67, 1)',
+                            'rgba(107, 197, 210, 1)',
+                            'rgba(255, 159, 67, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        const adminCtx = document.getElementById('adminChart');
+        if (adminCtx) {
+            const totalUsers = /*[[${!isOrganizer ? totalUsers : 0}]]*/ 0;
+            const totalFestivals = /*[[${!isOrganizer ? totalFestivals : 0}]]*/ 0;
+            const totalRegistrations = /*[[${!isOrganizer ? totalRegistrations : 0}]]*/ 0;
+
+            new Chart(adminCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Пользователи', 'Фестивали', 'Записи'],
+                    datasets: [{
+                        data: [
+                            totalUsers,
+                            totalFestivals,
+                            totalRegistrations
+                        ],
+                        backgroundColor: [
+                            'rgba(255, 159, 67, 0.8)',
+                            'rgba(107, 197, 210, 0.8)',
+                            'rgba(255, 193, 7, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 159, 67, 1)',
+                            'rgba(107, 197, 210, 1)',
+                            'rgba(255, 193, 7, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+    });
+    /*]]>*/
+</script>
+</body>
+</html>

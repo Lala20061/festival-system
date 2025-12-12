@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Музыкальные Фестивали</title>
+    <link rel="stylesheet" th:href="@{/style.css}" />
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const artistBtn = document.getElementById("artistFilterBtn");
+            const locationBtn = document.getElementById("locationFilterBtn");
+            const artistPop = document.getElementById("artistPopover");
+            const locationPop = document.getElementById("locationPopover");
+            const filterForm = document.getElementById("filterForm");
+
+            function openPopover(btn, pop) {
+                closeAllPopovers();
+                const rect = btn.getBoundingClientRect();
+                const containerRect = document.querySelector('.container').getBoundingClientRect();
+                pop.style.position = "absolute";
+                pop.style.left = (rect.left - containerRect.left) + "px";
+                pop.style.top = (rect.bottom - containerRect.top + 6) + "px";
+                pop.style.zIndex = "10000";
+                pop.style.display = "block";
+            }
+
+            function closeAllPopovers() {
+                document.querySelectorAll(".filter-popover").forEach(p => p.style.display = "none");
+            }
+
+            if (artistBtn) {
+                artistBtn.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    openPopover(artistBtn, artistPop);
+                });
+            }
+
+            if (locationBtn) {
+                locationBtn.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    openPopover(locationBtn, locationPop);
+                });
+            }
+
+            document.querySelectorAll(".filter-popover .btn-primary").forEach(okBtn => {
+                okBtn.addEventListener("click", function () {
+                    filterForm.submit();
+                });
+            });
+
+            document.querySelectorAll(".filter-popover .btn-secondary").forEach(cancelBtn => {
+                cancelBtn.addEventListener("click", closeAllPopovers);
+            });
+
+            document.addEventListener("click", function () {
+                closeAllPopovers();
+            });
+
+            document.querySelectorAll(".filter-popover").forEach(pop => {
+                pop.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                });
+            });
+        });
+
+        function openTicketModalFromButton(btn) {
+            const card = btn.closest('.festival-card');
+            if (!card) return;
+            const festId = card.getAttribute('data-festival-id');
+            const festName = card.getAttribute('data-festival-name');
+            if (!festId || !festName) return;
+            document.getElementById('festivalId').value = festId;
+            document.getElementById('modalFestivalName').textContent = festName;
+            document.getElementById('ticketForm').reset();
+            const msg = document.getElementById('ticketMessage');
+            if (msg) {
+                msg.style.display = 'none';
+                msg.textContent = '';
+            }
+            document.getElementById('ticketModal').style.display = 'flex';
+        }
+
+        function closeTicketModal() {
+            document.getElementById('ticketModal').style.display = 'none';
+        }
+
+        function submitTicket() {
+            const fullName = document.getElementById('fullName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const tickets = document.getElementById('tickets').value.trim();
+            const festId = document.getElementById('festivalId').value;
+
+            if (!fullName || !email || !tickets) {
+                showTicketMessage('Пожалуйста, заполните все поля.', 'alert-danger');
+                return;
+            }
+
+            fetch("/festivals/register", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: "festivalId=" + festId +
+                    "&fullName=" + encodeURIComponent(fullName) +
+                    "&email=" + encodeURIComponent(email) +
+                    "&tickets=" + tickets
+            })
+                .then(r => r.text())
+                .then(res => {
+                    if (res === "success") {
+                        showTicketMessage("Вы успешно записались!", "alert-success");
+                        setTimeout(closeTicketModal, 2000);
+                    } else if (res === "exists") {
+                        showTicketMessage("Вы уже записаны на этот фестиваль.", "alert-info");
+                    } else {
+                        showTicketMessage("Ошибка сервера.", "alert-danger");
+                    }
+                });
+        }
+
+        function showTicketMessage(text, cssClass) {
+            const msg = document.getElementById('ticketMessage');
+            msg.textContent = text;
+            msg.className = 'alert ' + cssClass;
+            msg.style.display = 'block';
+        }
+
+        function toggleAll(name, checked) {
+            document.querySelectorAll(`input[name="${name}"]`).forEach(cb => {
+                cb.checked = checked;
+            });
+        }
+    </script>
+</head>
+<body>
+<div class="header">
+    <div class="logo">
+        <i>🎵</i>
+        <span>Музыкальные Фестивали</span>
+    </div>
+    <div class="nav-menu">
+        <a href="/stats">Статистика</a>
+        <a href="/about">Об авторе</a>
+        <a href="/logout">Выйти</a>
+    </div>
+</div>
+
+<div class="container">
+    <div sec:authorize="hasRole('SUPER_ADMIN')" class="admin-panel">
+        <strong>Админ-панель:</strong>
+        <a href="/users" class="btn btn-primary" style="margin-left: 12px;">Управление пользователями</a>
+    </div>
+
+    <div th:if="${!isOrganizerView}">
+        <div class="form-container filters-wrap">
+            <form th:action="@{/festivals}" method="get" class="form-row" id="filterForm">
+                <div class="form-group" style="flex-grow:1;">
+                    <label for="search">Поиск</label>
+                    <input type="text" id="search" name="search" placeholder="Название, место, артист…" th:value="${search}" />
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label>Артисты</label>
+                    <div>
+                        <button type="button" class="filter-btn" id="artistFilterBtn">Артисты ▾</button>
+                        <div class="filter-popover" id="artistPopover">
+                            <div class="list">
+                                <label><input type="checkbox" id="artist_select_all" onclick="toggleAll('artist', this.checked)" /> Выбрать все</label>
+                                <div th:each="a : ${artists}" style="margin-top:6px;">
+                                    <label><input type="checkbox" name="artist" th:value="${a}" th:checked="${artist != null and #lists.contains(artist, a)}" /> <span th:text="${a}"></span></label>
+                                </div>
+                            </div>
+                            <div class="controls">
+                                <button type="button" class="btn btn-secondary" onclick="closePopover('artistPopover')">Отмена</button>
+                                <button type="button" class="btn btn-primary" onclick="applyPopover('artistPopover')">Ок</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="position:relative;">
+                    <label>Место</label>
+                    <div>
+                        <button type="button" class="filter-btn" id="locationFilterBtn">Место ▾</button>
+                        <div class="filter-popover" id="locationPopover">
+                            <div class="list">
+                                <label><input type="checkbox" id="location_select_all" onclick="toggleAll('location', this.checked)" /> Выбрать все</label>
+                                <div th:each="l : ${locations}" style="margin-top:6px;">
+                                    <label><input type="checkbox" name="location" th:value="${l}" th:checked="${location != null and #lists.contains(location, l)}" /> <span th:text="${l}"></span></label>
+                                </div>
+                            </div>
+                            <div class="controls">
+                                <button type="button" class="btn btn-secondary" onclick="closePopover('locationPopover')">Отмена</button>
+                                <button type="button" class="btn btn-primary" onclick="applyPopover('locationPopover')">Ок</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:auto;">
+                    <button type="submit" class="btn btn-primary">Применить</button>
+                    <a th:if="${search != null or artist != null or location != null}" href="/festivals" class="btn btn-secondary" style="margin-left:8px;">← Сбросить</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div th:if="${errorMessage}" class="alert alert-danger" th:text="${errorMessage}"></div>
+    <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+
+    <div sec:authorize="hasAnyRole('ADMIN','SUPER_ADMIN','ORGANIZER')" th:if="${editingId == null}" class="form-container">
+        <h2>Добавить фестиваль</h2>
+        <form th:action="@{/festivals/add}" method="post" th:object="${festival}" class="form-row" id="addForm">
+            <div class="form-group">
+                <label for="name">Название</label>
+                <input type="text" id="name" th:field="*{name}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+            </div>
+            <div class="form-group">
+                <label for="startDate">Дата начала</label>
+                <input type="date" id="startDate" th:field="*{startDate}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('startDate')}" th:errors="*{startDate}"></div>
+            </div>
+            <div class="form-group">
+                <label for="endDate">Дата окончания</label>
+                <input type="date" id="endDate" th:field="*{endDate}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('endDate')}" th:errors="*{endDate}"></div>
+            </div>
+            <div class="form-group">
+                <label for="location">Место</label>
+                <input type="text" id="location" th:field="*{location}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('location')}" th:errors="*{location}"></div>
+            </div>
+            <div class="form-group" sec:authorize="hasAnyRole('ADMIN','SUPER_ADMIN')">
+                <label for="organizerName">Организатор (имя)</label>
+                <input type="text" id="organizerName" th:field="*{organizerName}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('organizerName')}" th:errors="*{organizerName}"></div>
+            </div>
+            <div class="form-group">
+                <label for="artists">Артисты (через запятую)</label>
+                <textarea id="artists" th:field="*{artists}" rows="1" required></textarea>
+                <div class="field-error" th:if="${#fields.hasErrors('artists')}" th:errors="*{artists}"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <a href="/festivals" class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+
+    <div th:if="${editingId != null}" class="form-container">
+        <h2>Редактировать фестиваль</h2>
+        <form th:action="@{/festivals/save}" method="post" th:object="${festival}" class="form-row">
+            <input type="hidden" th:field="*{id}" />
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" th:field="*{name}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+            </div>
+            <div class="form-group">
+                <label>Дата начала</label>
+                <input type="date" th:field="*{startDate}" th:value="${festival != null && festival.startDate != null ? #temporals.format(festival.startDate, 'yyyy-MM-dd') : ''}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('startDate')}" th:errors="*{startDate}"></div>
+            </div>
+            <div class="form-group">
+                <label>Дата окончания</label>
+                <input type="date" th:field="*{endDate}" th:value="${festival != null && festival.endDate != null ? #temporals.format(festival.endDate, 'yyyy-MM-dd') : ''}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('endDate')}" th:errors="*{endDate}"></div>
+            </div>
+            <div class="form-group">
+                <label>Место</label>
+                <input type="text" th:field="*{location}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('location')}" th:errors="*{location}"></div>
+            </div>
+            <div class="form-group" sec:authorize="hasAnyRole('ADMIN','SUPER_ADMIN')">
+                <label>Организатор (имя)</label>
+                <input type="text" th:field="*{organizerName}" required />
+                <div class="field-error" th:if="${#fields.hasErrors('organizerName')}" th:errors="*{organizerName}"></div>
+            </div>
+            <div class="form-group">
+                <label>Артисты (через запятую)</label>
+                <textarea th:field="*{artists}" rows="1" required></textarea>
+                <div class="field-error" th:if="${#fields.hasErrors('artists')}" th:errors="*{artists}"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <a href="/festivals" class="btn btn-secondary">Отмена</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-container" id="festivals-section">
+        <div class="section-header">
+            <div>
+                <h2>Список фестивалей</h2>
+                <p class="section-subtitle">Подберите событие, отфильтруйте по артистам или местам и сразу запишитесь.</p>
+            </div>
+            <div>
+                <div sec:authorize="hasRole('USER')" style="margin-top: 12px;">
+                    <a href="/festivals/mytickets" class="btn btn-secondary">Мои записи</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-actions" style="margin-bottom: 16px;">
+            <span class="pill">Сортировать по:</span>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='name', order=${sort == 'name' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="name">
+                Название <span th:if="${sort == 'name'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='startDate', order=${sort == 'startDate' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="startDate">
+                Начало <span th:if="${sort == 'startDate'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='endDate', order=${sort == 'endDate' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="endDate">
+                Окончание <span th:if="${sort == 'endDate'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='location', order=${sort == 'location' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="location">
+                Место <span th:if="${sort == 'location'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='organizer', order=${sort == 'organizer' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="organizer">
+                Организатор <span th:if="${sort == 'organizer'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+            <a class="chip gray sort-link"
+               th:attr="href=@{/festivals(sort='artists', order=${sort == 'artists' && order == 'asc' ? 'desc' : 'asc'}, search=${search}, artist=${artist}, location=${location})} + '#festivals-section'"
+               data-sort="artists">
+                Артисты <span th:if="${sort == 'artists'}" th:text="${order == 'asc' ? '▲' : '▼'}"></span>
+            </a>
+        </div>
+
+        <div class="festivals-list" id="festivalsList" th:if="${festivals != null && !festivals.isEmpty()}">
+            <div class="festival-card festival-item"
+                 th:each="f : ${festivals}"
+                 th:if="${editingId == null || editingId != f.id}"
+                 th:data-festival-id="${f.id}"
+                 th:data-festival-name="${f.name}">
+                <div class="festival-card-content">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <h3 class="card-title" style="margin: 0; text-align: left;" th:text="${f.name ?: '—'}"></h3>
+                        <span class="chip blue" th:text="${f.location ?: '—'}">Место</span>
+                        <span class="chip gray" th:text="${f.organizer != null ? f.organizer.name : (f.organizerName != null ? f.organizerName : '—')}">Организатор</span>
+                    </div>
+                    <p class="section-subtitle" style="margin: 0 0 12px 0; text-align: left;" th:text="${f.artists ?: '—'}">Участники</p>
+                    <div class="festival-card-meta">
+                        <div class="meta-item" style="margin: 0;">
+                            <span class="meta-label">Дата начала</span>
+                            <span class="meta-value">
+                                <span class="date-display" th:text="${#temporals.format(f.startDate,'dd.MM.yyyy')}"></span>
+                            </span>
+                        </div>
+                        <div class="meta-item" style="margin: 0;">
+                            <span class="meta-label">Дата окончания</span>
+                            <span class="meta-value">
+                                <span class="date-display" th:text="${#temporals.format(f.endDate,'dd.MM.yyyy')}"></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="festival-card-actions">
+                    <div sec:authorize="hasAnyRole('ADMIN','SUPER_ADMIN','ORGANIZER')">
+                        <a th:href="@{/festivals/edit/{id}(id=${f.id})}" class="btn btn-secondary">Редактировать</a>
+                        <a th:href="@{/festivals/delete/{id}(id=${f.id})}" class="btn btn-secondary"
+                           th:attr="data-fname=${f.name}"
+                           onclick="return confirm('Удалить фестиваль «' + (this.dataset.fname || '') + '»?')">Удалить</a>
+                    </div>
+                    <div sec:authorize="hasRole('USER')">
+                        <button type="button" class="btn btn-primary" onclick="openTicketModalFromButton(this)">
+                            Записаться
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${festivals != null && festivals.isEmpty()}" class="no-results">
+            <span th:if="${search != null or artist != null or location != null}">ничего не найдено</span>
+            <span th:if="${search == null && artist == null && location == null}">пока нет фестивалей</span>
+        </div>
+
+        <div id="pagination" class="pagination-container" style="display: none; margin-top: 24px; text-align: center;">
+            <button class="pagination-btn" id="prevPage" onclick="changePage(-1)">←</button>
+            <div id="pageNumbers" class="page-numbers"></div>
+            <button class="pagination-btn" id="nextPage" onclick="changePage(1)">→</button>
+        </div>
+    </div>
+</div>
+
+<div id="ticketModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeTicketModal()">&times;</span>
+        <h3>Запись на фестиваль: <span id="modalFestivalName">—</span></h3>
+        <form id="ticketForm">
+            <input type="hidden" id="festivalId" />
+            <div class="form-group">
+                <label for="fullName">ФИО</label>
+                <input type="text" id="fullName" required />
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required />
+            </div>
+            <div class="form-group">
+                <label for="tickets">Количество билетов</label>
+                <input type="number" id="tickets" min="1" max="10" value="1" required />
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" onclick="submitTicket()">Отправить заявку</button>
+                <button type="button" class="btn btn-secondary" onclick="closeTicketModal()">Отмена</button>
+            </div>
+        </form>
+        <div id="ticketMessage" class="alert" style="display:none; margin-top:15px;"></div>
+    </div>
+</div>
+
+<script>
+    function closePopover(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    function applyPopover(id) {
+        document.getElementById('filterForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const sortLinks = document.querySelectorAll('.sort-link');
+        sortLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href && href.includes('#festivals-section')) {
+                    e.preventDefault();
+                    window.location.href = href;
+                    setTimeout(() => {
+                        document.getElementById('festivals-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            });
+        });
+    });
+
+    let currentPage = 1;
+    const itemsPerPage = 6;
+
+    function initPagination() {
+        const items = document.querySelectorAll('.festival-item');
+        const totalItems = items.length;
+
+        if (totalItems <= itemsPerPage) {
+            document.getElementById('pagination').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('pagination').style.display = 'flex';
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        updatePagination(totalPages);
+        showPage(1);
+    }
+
+    function showPage(page) {
+        const items = document.querySelectorAll('.festival-item');
+        const start = (page - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+
+        items.forEach((item, index) => {
+            if (index >= start && index < end) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        currentPage = page;
+        const totalPages = Math.ceil(items.length / itemsPerPage);
+        updatePagination(totalPages);
+    }
+
+    function changePage(direction) {
+        const items = document.querySelectorAll('.festival-item');
+        const totalPages = Math.ceil(items.length / itemsPerPage);
+        const newPage = currentPage + direction;
+
+        if (newPage >= 1 && newPage <= totalPages) {
+            showPage(newPage);
+            document.getElementById('festivals-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function updatePagination(totalPages) {
+        const pageNumbers = document.getElementById('pageNumbers');
+        pageNumbers.innerHTML = '';
+
+        for (let i = 1; i <= totalPages; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'pagination-number';
+            if (i === currentPage) {
+                btn.classList.add('active');
+            }
+            btn.textContent = i;
+            btn.onclick = () => {
+                showPage(i);
+                document.getElementById('festivals-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+            pageNumbers.appendChild(btn);
+        }
+
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage === totalPages;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initPagination();
+    });
+</script>
+</body>
+</html>
